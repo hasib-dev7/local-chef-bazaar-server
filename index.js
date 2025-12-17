@@ -20,6 +20,11 @@ async function run() {
   try {
     const db = client.db("mealsDB");
     const mealsCollection = db.collection("meal");
+    // get meals
+    app.get("/meals", async (req, res) => {
+      const result = await mealsCollection.find().toArray();
+      res.send(result);
+    });
     // post meals
     app.post("/meals", async (req, res) => {
       const cursor = { ...req.body, createdAt: new Date() };
