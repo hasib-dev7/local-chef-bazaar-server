@@ -22,7 +22,8 @@ async function run() {
     const mealsCollection = db.collection("meal");
     // post meals
     app.post("/meals", async (req, res) => {
-      const cursor = req.body;
+      const cursor = { ...req.body, createdAt: new Date() };
+
       const result = await mealsCollection.insertOne(cursor);
       res.send(result);
     });
