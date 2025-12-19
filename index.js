@@ -25,11 +25,24 @@ async function run() {
       const result = await mealsCollection.find().toArray();
       res.send(result);
     });
+    // get meals single data
+    app.get("/meals/:id", async (req, res) => {
+      const id = req.params.id;
+      const cursor = { _id: new ObjectId(id) };
+      const result = await mealsCollection.findOne(cursor);
+      res.send(result);
+    });
     // post meals
     app.post("/meals", async (req, res) => {
       const cursor = { ...req.body, createdAt: new Date() };
 
       const result = await mealsCollection.insertOne(cursor);
+      res.send(result);
+    });
+    // get my meals
+    app.get("/my-meals/:email", async (req, res) => {
+      const email = req.params.email;
+      const result = await mealsCollection.find({email}).toArray();
       res.send(result);
     });
     // Connect the client to the server	(optional starting in v4.7)
