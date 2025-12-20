@@ -42,7 +42,33 @@ async function run() {
     // get my meals
     app.get("/my-meals/:email", async (req, res) => {
       const email = req.params.email;
-      const result = await mealsCollection.find({email}).toArray();
+      const result = await mealsCollection.find({ email }).toArray();
+      res.send(result);
+    });
+    // delete my meals card
+    app.delete("/my-meals/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await mealsCollection.deleteOne(query);
+      res.send(result);
+    });
+    // update my meals card
+    app.patch("/my-meals/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const body = req.body;
+      const filteredUpdate = {};
+      if (body.foodName) filteredUpdate.foodName = body.foodName;
+      if (body.price) filteredUpdate.price = body.price;
+      if (body.deliveryTime) filteredUpdate.deliveryTime = body.deliveryTime;
+      if (body.imageURL) filteredUpdate.imageURL = body.imageURL;
+      if (body.ingredients) filteredUpdate.ingredients = body.ingredients;
+      if (body.chefExperience)
+        filteredUpdate.chefExperience = body.chefExperience;
+      const updateDoc = {
+        $set: filteredUpdate,
+      };
+      const result = await mealsCollection.updateOne(query, updateDoc);
       res.send(result);
     });
     // Connect the client to the server	(optional starting in v4.7)
