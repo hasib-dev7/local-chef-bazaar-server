@@ -24,6 +24,8 @@ async function run() {
     const db = client.db("mealsDB");
     const mealsCollection = db.collection("meal");
     const orderCollection = db.collection("order");
+    const paymentCollection = db.collection("payment");
+    const reviesCollection = db.collection("reviews");
     // get meals
     app.get("/meals", async (req, res) => {
       const result = await mealsCollection.find().toArray();
@@ -34,6 +36,21 @@ async function run() {
       const id = req.params.id;
       const cursor = { _id: new ObjectId(id) };
       const result = await mealsCollection.findOne(cursor);
+      res.send(result);
+    });
+    // reviews data get
+    app.get("/reviews", async (req, res) => {
+      const { foodId } = req.query;
+      const result = await reviesCollection.find({ foodId }).toArray();
+      res.send(result);
+    });
+    // reviews section
+    app.post("/reviews", async (req, res) => {
+      const body = {
+        ...req.body,
+        createdAt: new Date(),
+      };
+      const result = await reviesCollection.insertOne(body);
       res.send(result);
     });
     // post meals
@@ -109,27 +126,73 @@ async function run() {
       });
       res.send({ url: session.url });
     });
-    // payment susscess
-    app.post("/payment-success", async (req, res) => {
-      const { sessionId } = req.body;
+    app.patch("/payment-success", async (req, res) => {
+      const sessionId = req.query.session_id;
       const session = await stripe.checkout.sessions.retrieve(sessionId);
-      const query = session.metadata.foodId;
-      const meal = await mealsCollection.findOne({ _id: new ObjectId(query) });
-      console.log(meal);
-      // status: 'complete'
-      if (session.status === "complete") {
-        // save order data fron mongodb
+      const transactionId = session.payment_intent;
+      const queryId = { transactionId: transactionId };
+      const paymentExisting = await paymentCollection.findOne(queryId);
+      if (paymentExisting) {
+        return res.send({ message: "already exist", transactionId });
+      }
+      // payment_status: 'paid',
+      if (session.payment_status === "paid") {
+        const id = session.metadata.foodId;
+        const query = { _id: new ObjectId(id) };
+        const update = {
+          $set: {
+            paymentStatus: "paid",
+          },
+        };
+
         const orderInfo = {
           foodId: session.metadata.foodId,
           chefId: session.metadata.chefId,
           transactionId: session.payment_intent,
           customer_email: session.customer_email,
           customer_name: session.metadata.customer_name,
-          status: "pending",
+          amount: session.amount_total / 100,
+          payment_status: session.payment_status,
+          paidAt: new Date(),
         };
+        const result = await orderCollection.updateOne(query, update);
+        const paymentResult = await paymentCollection.insertOne(orderInfo);
+        return res.send({ success: true, result, paymentResult });
       }
+
+      res.send({ status: false });
     });
-    
+
+    app.get("/orders/:email", async (req, res) => {
+      const email = req.params.email;
+      const result = await orderCollection
+        .find({ "customer.email": email })
+        .toArray();
+      res.send(result);
+    });
+    // order request update
+    app.patch("/order-request/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const body = req.body;
+      const filteredUpdate = {};
+      if (body.paymentStatus) filteredUpdate.paymentStatus = body.paymentStatus;
+      if (body.orderStatus) filteredUpdate.orderStatus = body.orderStatus;
+      const updateDoc = {
+        $set: filteredUpdate,
+      };
+      const result = await orderCollection.updateOne(query, updateDoc);
+      res.send(result);
+    });
+    // order request get data to
+    app.get("/request-orders/:email", async (req, res) => {
+      const email = req.params.email;
+      console.log();
+      const result = await orderCollection
+        .find({ chef_email: email })
+        .toArray();
+      res.send(result);
+    });
     // meal order post save to bd
     app.post("/orders", async (req, res) => {
       const { foodId, customer } = req.body;
