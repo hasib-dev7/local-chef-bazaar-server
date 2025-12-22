@@ -43,8 +43,23 @@ async function run() {
     app.post("/favorite", async (req, res) => {
       const body = {
         ...req.body,
-        createdAt:new Date()
+        createdAt: new Date(),
       };
+      // userEmail "hasib@gmial.com
+      // mealId "6946ecd0bd3935473b837df0"
+      //
+      const { userEmail } = req.body;
+      const { mealId } = req.body;
+      const isExisting = await favoritesCollection.findOne({
+        userEmail: userEmail,
+        mealId: mealId,
+      });
+      if (isExisting) {
+        return res.status(409).send({
+          success: false,
+          message: "Meal already added to favorites",
+        });
+      }
       const result = await favoritesCollection.insertOne(body);
       res.send(result);
     });
