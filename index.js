@@ -26,6 +26,7 @@ async function run() {
     const orderCollection = db.collection("order");
     const paymentCollection = db.collection("payment");
     const reviesCollection = db.collection("reviews");
+    const favoritesCollection = db.collection("favorite");
     // get meals
     app.get("/meals", async (req, res) => {
       const result = await mealsCollection.find().toArray();
@@ -36,6 +37,15 @@ async function run() {
       const id = req.params.id;
       const cursor = { _id: new ObjectId(id) };
       const result = await mealsCollection.findOne(cursor);
+      res.send(result);
+    });
+    // favorite data post db
+    app.post("/favorite", async (req, res) => {
+      const body = {
+        ...req.body,
+        createdAt:new Date()
+      };
+      const result = await favoritesCollection.insertOne(body);
       res.send(result);
     });
     // reviews data get
