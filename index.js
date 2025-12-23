@@ -5,12 +5,10 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 //  You can also find your test secret API key
 const stripe = require("stripe")(process.env.STRIPE_SECRET);
 const port = process.env.PORT || 3000;
-
 const app = express();
 // middleware
 app.use(cors());
 app.use(express.json());
-
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(process.env.MONGODB_URL, {
   serverApi: {
@@ -27,7 +25,7 @@ async function run() {
     const paymentCollection = db.collection("payment");
     const reviesCollection = db.collection("reviews");
     const favoritesCollection = db.collection("favorite");
-    // get meals
+    // get meals..........meals section
     app.get("/meals", async (req, res) => {
       const result = await mealsCollection.find().toArray();
       res.send(result);
@@ -37,48 +35,6 @@ async function run() {
       const id = req.params.id;
       const cursor = { _id: new ObjectId(id) };
       const result = await mealsCollection.findOne(cursor);
-      res.send(result);
-    });
-    // favorite data post db
-    app.post("/favorite", async (req, res) => {
-      const body = {
-        ...req.body,
-        createdAt: new Date(),
-      };
-      const { userEmail } = req.body;
-      const { mealId } = req.body;
-      const isExisting = await favoritesCollection.findOne({
-        userEmail: userEmail,
-        mealId: mealId,
-      });
-      if (isExisting) {
-        return res.status(409).send({
-          success: false,
-          message: "Meal already added to favorites",
-        });
-      }
-      const result = await favoritesCollection.insertOne(body);
-      res.send(result);
-    });
-    // get user all reviews data
-    app.get("/reviews", async (req, res) => {
-      const { email } = req.query;
-      const result = await reviesCollection.find({ email: email }).toArray();
-      res.send(result);
-    });
-    // reviews data get
-    app.get("/reviews", async (req, res) => {
-      const { foodId } = req.query;
-      const result = await reviesCollection.find({ foodId }).toArray();
-      res.send(result);
-    });
-    // reviews section
-    app.post("/reviews", async (req, res) => {
-      const body = {
-        ...req.body,
-        createdAt: new Date(),
-      };
-      const result = await reviesCollection.insertOne(body);
       res.send(result);
     });
     // post meals
@@ -122,8 +78,60 @@ async function run() {
       const result = await mealsCollection.updateOne(query, updateDoc);
       res.send(result);
     });
+    // ........... favorite section
+    // favorite data post db
+    app.post("/favorite", async (req, res) => {
+      const body = {
+        ...req.body,
+        createdAt: new Date(),
+      };
+      const { userEmail } = req.body;
+      const { mealId } = req.body;
+      const isExisting = await favoritesCollection.findOne({
+        userEmail: userEmail,
+        mealId: mealId,
+      });
+      if (isExisting) {
+        return res.status(409).send({
+          success: false,
+          message: "Meal already added to favorites",
+        });
+      }
+      const result = await favoritesCollection.insertOne(body);
+      res.send(result);
+    });
+    // .............  reviews section
+    // reviews post section
+    app.post("/reviews", async (req, res) => {
+      const body = {
+        ...req.body,
+        createdAt: new Date(),
+      };
+      const result = await reviesCollection.insertOne(body);
+      res.send(result);
+    });
+    // reviews data food name id
+    app.get("/reviews", async (req, res) => {
+      const { foodId } = req.query;
+      const result = await reviesCollection.find({ foodId }).toArray();
+      res.send(result);
+    });
+    // get user login email  all reviews data
+    app.get("/reviews/:email", async (req, res) => {
+      const email = req.params.email;
+      const result = await reviesCollection.find({ email: email }).toArray();
+      res.send(result);
+    });
+    // delete reviews data
+    app.delete("/reviews/:id", async (req, res) => {
+      const id = req.params.id;
+      console.log("id.......",id)
+      const query = { _id: new ObjectId(id) };
+      const result = await reviesCollection.deleteOne(query);
+      res.send(result);
+    });
+    // ................. payment section
     // payment reletive apis
-    // paymetn endpoint
     app.post("/create-checkout-session", async (req, res) => {
       const paymentInfo = req.body;
       // console.log("payment info", paymentInfo);
@@ -190,6 +198,7 @@ async function run() {
 
       res.send({ status: false });
     });
+    // ........ order section
     // get order user email
     app.get("/orders/:email", async (req, res) => {
       const email = req.params.email;
