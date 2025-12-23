@@ -45,9 +45,6 @@ async function run() {
         ...req.body,
         createdAt: new Date(),
       };
-      // userEmail "hasib@gmial.com
-      // mealId "6946ecd0bd3935473b837df0"
-      //
       const { userEmail } = req.body;
       const { mealId } = req.body;
       const isExisting = await favoritesCollection.findOne({
@@ -61,6 +58,12 @@ async function run() {
         });
       }
       const result = await favoritesCollection.insertOne(body);
+      res.send(result);
+    });
+    // get user all reviews data
+    app.get("/reviews", async (req, res) => {
+      const { email } = req.query;
+      const result = await reviesCollection.find({ email: email }).toArray();
       res.send(result);
     });
     // reviews data get
@@ -147,7 +150,7 @@ async function run() {
           chefId: paymentInfo?.chefId,
         },
         success_url: `${process.env.CLIENT_DOMAIN}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${process.env.CLIENT_DOMAIN}/order-form/${paymentInfo?.foodId}`,
+        cancel_url: `${process.env.CLIENT_DOMAIN}/dashboard/dashboard/user-orders`,
       });
       res.send({ url: session.url });
     });
@@ -187,7 +190,7 @@ async function run() {
 
       res.send({ status: false });
     });
-
+    // get order user email
     app.get("/orders/:email", async (req, res) => {
       const email = req.params.email;
       const result = await orderCollection
@@ -209,7 +212,7 @@ async function run() {
       const result = await orderCollection.updateOne(query, updateDoc);
       res.send(result);
     });
-    // order request get data to
+    // order request get data to db
     app.get("/request-orders/:email", async (req, res) => {
       const email = req.params.email;
       console.log();
