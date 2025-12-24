@@ -100,6 +100,22 @@ async function run() {
       const result = await favoritesCollection.insertOne(body);
       res.send(result);
     });
+    // favorite data get db
+    app.get("/favorite/:email", async (req, res) => {
+      const email = req.params.email;
+      const query = {
+        userEmail: email,
+      };
+      const result = await favoritesCollection.find(query).toArray();
+      res.send(result);
+    });
+    // favorite meal data delete
+    app.delete("/favorite/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await favoritesCollection.deleteOne(query);
+      res.send(result)
+    });
     // .............  reviews section
     // reviews post section
     app.post("/reviews", async (req, res) => {
@@ -138,7 +154,7 @@ async function run() {
       if (body.reviews) filteredUpdate.reviews = body.reviews;
       if (body.rating) filteredUpdate.rating = body.rating;
       const update = {
-        $set:  filteredUpdate 
+        $set: filteredUpdate,
       };
       const result = await reviesCollection.updateOne(query, update);
       res.send(result);
