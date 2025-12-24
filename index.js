@@ -125,9 +125,22 @@ async function run() {
     // delete reviews data
     app.delete("/reviews/:id", async (req, res) => {
       const id = req.params.id;
-      console.log("id.......",id)
       const query = { _id: new ObjectId(id) };
       const result = await reviesCollection.deleteOne(query);
+      res.send(result);
+    });
+    // review data update
+    app.patch("/reviews/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const body = req.body;
+      const filteredUpdate = {};
+      if (body.reviews) filteredUpdate.reviews = body.reviews;
+      if (body.rating) filteredUpdate.rating = body.rating;
+      const update = {
+        $set:  filteredUpdate 
+      };
+      const result = await reviesCollection.updateOne(query, update);
       res.send(result);
     });
     // ................. payment section
