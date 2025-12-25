@@ -4,11 +4,41 @@ const cors = require("cors");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 //  You can also find your test secret API key
 const stripe = require("stripe")(process.env.STRIPE_SECRET);
+const admin = require("firebase-admin");
 const port = process.env.PORT || 3000;
+const decoded = Buffer.from(process.env.FB_SERVICE_KEY, "base64").toString(
+  "utf-8"
+);
+const serviceAccount = JSON.parse(decoded);
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
+
 const app = express();
 // middleware
-app.use(cors());
+app.use(
+  cors({
+    origin: [process.env.CLIENT_DOMAIN],
+    credentials: true,
+    optionSuccessStatus: 200,
+  })
+);
 app.use(express.json());
+// jwt middlewares
+const verifyJWT = async (req, res, next) => {
+  const token = req?.headers?.authorization?.split(" ")[1];
+  // console.log(token);
+  if (!token) return res.status(401).send({ message: "Unauthorized Access!" });
+  try {
+    const decoded = await admin.auth().verifyIdToken(token);
+    req.tokenEmail = decoded.email;
+    console.log(decoded);
+    next();
+  } catch (err) {
+    console.log(err);
+    return res.status(401).send({ message: "Unauthorized Access!", err });
+  }
+};
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(process.env.MONGODB_URL, {
   serverApi: {
@@ -25,6 +55,34 @@ async function run() {
     const paymentCollection = db.collection("payment");
     const reviesCollection = db.collection("reviews");
     const favoritesCollection = db.collection("favorite");
+    const usersCollection = db.collection("user");
+    // post user data .......user role section
+    app.post("/users", async (req, res) => {
+      const userData = req.body;
+      const query = { email: userData.email };
+      const alreadyExist = await usersCollection.findOne(query);
+      if (alreadyExist) {
+        const updateOn = {
+          $set: { lastLogin: new Date().toISOString() },
+        };
+        const updateResult = await usersCollection.updateOne(query, updateOn);
+        return res.send(updateResult);
+      }
+      // new user
+      userData.role = "user";
+      userData.status = "active";
+      userData.createdAtLogin = new Date().toISOString();
+      userData.lastLogin = new Date().toISOString();
+      const result = await usersCollection.insertOne(userData);
+      res.send(result);
+    });
+    // get user's role ....role section
+    app.get("/user/role", verifyJWT, async (req, res) => {
+      // console.log("veriy email",req.tokenEmail);
+
+      const result = await usersCollection.findOne({ email: req.tokenEmail });
+      res.send({ role: result?.role });
+    });
     // get meals..........meals section
     app.get("/meals", async (req, res) => {
       const result = await mealsCollection.find().toArray();
@@ -114,7 +172,7 @@ async function run() {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const result = await favoritesCollection.deleteOne(query);
-      res.send(result)
+      res.send(result);
     });
     // .............  reviews section
     // reviews post section

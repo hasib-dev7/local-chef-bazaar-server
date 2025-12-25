@@ -1,2 +1,7 @@
 node_modules
 .env
+
+
+# Ignore Firebase service key
+services-key.json
+services-key.json
