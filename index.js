@@ -77,6 +77,60 @@ async function run() {
       const result = await usersCollection.insertOne(userData);
       res.send(result);
     });
+    // GET /users
+    app.get("/users", async (req, res) => {
+      try {
+        const users = await usersCollection.find().toArray();
+        res.send(users);
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ message: "Server error" });
+      }
+    });
+    // get user email data
+    app.get("/users/:email",async(req,res)=>{
+      const email=req.params.email;
+      const result=await usersCollection.findOne({email})
+      res.send(result)
+    })
+    // PATCH /users/fraud/:userId
+    app.patch("/users/fraud/:userId", async (req, res) => {
+      try {
+        const { userId } = req.params;
+        // Validate userId
+        if (!userId) {
+          return res.status(400).send({ message: "User ID is required" });
+        }
+        // Find user
+        const user = await usersCollection.findOne({
+          _id: new ObjectId(userId),
+        });
+        if (!user) {
+          return res.status(404).send({ message: "User not found" });
+        }
+        // Admins cannot be fraud
+        if (user.role === "admin") {
+          return res
+            .status(400)
+            .send({ message: "Admin cannot be marked as fraud" });
+        }
+        // Already fraud?
+        if (user.status === "fraud") {
+          return res.status(400).send({ message: "User is already fraud" });
+        }
+        // Update user status to fraud
+        await usersCollection.updateOne(
+          { _id: new ObjectId(userId) },
+          { $set: { status: "fraud" } }
+        );
+
+        res.send({ message: `${user.name} has been marked as fraud ` });
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ message: "Server error" });
+      }
+    });
+
     // get user's role ....role section
     app.get("/user/role", verifyJWT, async (req, res) => {
       // console.log("veriy email",req.tokenEmail);
@@ -90,6 +144,7 @@ async function run() {
       const result = await usersCollection.find({ email }).toArray();
       res.send(result);
     });
+
     // role request API
     // get role request request type
     app.get("/role/requestType/:userId", async (req, res) => {
@@ -154,10 +209,26 @@ async function run() {
     });
     // post meals
     app.post("/meals", async (req, res) => {
-      const cursor = { ...req.body, createdAt: new Date() };
-
-      const result = await mealsCollection.insertOne(cursor);
-      res.send(result);
+      try {
+        const { chefID } = req.body;
+        // check if chef exists
+        const chef = await usersCollection.findOne({
+          _id: new ObjectId(chefID),
+        });
+        if (!chef) return res.status(404).send({ message: "Chef not found" });
+        // block fraud chefs
+        if (chef.status === "fraud") {
+          return res
+            .status(403)
+            .send({ message: "You are blocked and cannot create meals 🚫" });
+        }
+        const mealData = { ...req.body, createdAt: new Date() };
+        const result = await mealsCollection.insertOne(mealData);
+        res.send({ message: "Meal created successfully ✅", result });
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ message: "Server error" });
+      }
     });
     // get my meals
     app.get("/my-meals/:email", async (req, res) => {
@@ -378,6 +449,16 @@ async function run() {
     app.post("/orders", async (req, res) => {
       const { foodId, customer } = req.body;
       const email = customer?.email;
+      // check if user is fraud
+      // const existingUser = await usersCollection.findOne({ email: email });
+      // if (!existingUser) {
+      //   return res.status(404).send({ error: "User not found!" });
+      // }
+      // if (existingUser.status === "fraud" && existingUser.role === "user") {
+      //   return res
+      //     .status(403)
+      //     .send({ error: "Fraud user cannot place orders 🚫" });
+      // }
       // check if user already ordered this meal
       const existingOrder = await orderCollection.findOne({
         foodId: foodId,
