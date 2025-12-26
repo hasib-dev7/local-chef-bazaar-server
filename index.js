@@ -88,11 +88,11 @@ async function run() {
       }
     });
     // get user email data
-    app.get("/users/:email",async(req,res)=>{
-      const email=req.params.email;
-      const result=await usersCollection.findOne({email})
-      res.send(result)
-    })
+    app.get("/users/:email", async (req, res) => {
+      const email = req.params.email;
+      const result = await usersCollection.findOne({ email });
+      res.send(result);
+    });
     // PATCH /users/fraud/:userId
     app.patch("/users/fraud/:userId", async (req, res) => {
       try {
@@ -139,10 +139,68 @@ async function run() {
       res.send({ role: result?.role });
     });
     // get user profile data
-    app.get("/users/role", verifyJWT, async (req, res) => {
+    app.get("/user/profile", verifyJWT, async (req, res) => {
       const email = req.tokenEmail;
       const result = await usersCollection.find({ email }).toArray();
       res.send(result);
+    });
+    // manage request section
+    // get all role requests
+    app.get("/role-requests", verifyJWT, async (req, res) => {
+      const result = await roleCollection.find().toArray();
+      res.send(result);
+    });
+    // approve request
+    app.patch("/role-requests/approve/:id", verifyJWT, async (req, res) => {
+      const requestId = req.params.id;
+      const request = await roleCollection.findOne({
+        _id: new ObjectId(requestId),
+      });
+      if (!request) {
+        return res.status(404).send({ message: "Request not found" });
+      }
+      //  Chef request
+      if (request.requestType === "chef") {
+        const chefId = `chef-${Math.floor(1000 + Math.random() * 9000)}`;
+        await usersCollection.updateOne(
+          { _id: new ObjectId(request.userId) },
+          {
+            $set: {
+              role: "chef",
+              chefId: chefId,
+            },
+          }
+        );
+      }
+      //  Admin request
+      if (request.requestType === "admin") {
+        await usersCollection.updateOne(
+          { _id: new ObjectId(request.userId) },
+          {
+            $set: { role: "admin" },
+          }
+        );
+      }
+      //  Update request status
+      await roleCollection.updateOne(
+        { _id: new ObjectId(requestId) },
+        { $set: { requestStatus: "approved" } }
+      );
+      res.send({ message: "Request approved successfully" });
+    });
+    // reject request
+    app.patch("/role-requests/reject/:id", verifyJWT, async (req, res) => {
+      const requestId = req.params.id;
+      const request = await roleCollection.findOne({
+        _id: new ObjectId(requestId),
+      });
+      if (!request)
+        return res.status(404).send({ message: "Request not found" });
+      await roleCollection.updateOne(
+        { _id: new ObjectId(requestId) },
+        { $set: { requestStatus: "rejected" } }
+      );
+      res.send({ message: "Request rejected successfully" });
     });
 
     // role request API
