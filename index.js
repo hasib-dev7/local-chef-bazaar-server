@@ -32,10 +32,10 @@ const verifyJWT = async (req, res, next) => {
   try {
     const decoded = await admin.auth().verifyIdToken(token);
     req.tokenEmail = decoded.email;
-    console.log(decoded);
+    // console.log(decoded);
     next();
   } catch (err) {
-    console.log(err);
+    // console.log(err);
     return res.status(401).send({ message: "Unauthorized Access!", err });
   }
 };
@@ -56,6 +56,7 @@ async function run() {
     const reviesCollection = db.collection("reviews");
     const favoritesCollection = db.collection("favorite");
     const usersCollection = db.collection("user");
+    const roleCollection = db.collection("role");
     // post user data .......user role section
     app.post("/users", async (req, res) => {
       const userData = req.body;
@@ -82,6 +83,62 @@ async function run() {
 
       const result = await usersCollection.findOne({ email: req.tokenEmail });
       res.send({ role: result?.role });
+    });
+    // get user profile data
+    app.get("/users/role", verifyJWT, async (req, res) => {
+      const email = req.tokenEmail;
+      const result = await usersCollection.find({ email }).toArray();
+      res.send(result);
+    });
+    // role request API
+    // get role request request type
+    app.get("/role/requestType/:userId", async (req, res) => {
+      const { userId } = req.params;
+      const result = await roleCollection.findOne({
+        userId,
+        requestStatus: "pending",
+      });
+      res.send(result);
+    });
+    // POST /role/request
+    app.post("/role/request", async (req, res) => {
+      try {
+        const { userId, requestType } = req.body;
+        if (!userId || !requestType) {
+          return res
+            .status(400)
+            .send({ message: "userId and requestType required" });
+        }
+        //  block if already pending request exists
+        const existing = await roleCollection.findOne({
+          userId,
+          requestStatus: "pending",
+        });
+        if (existing) {
+          return res.status(400).send({
+            message: `You already have a pending ${existing.requestType} request`,
+          });
+        }
+        // get user info
+        const user = await usersCollection.findOne({
+          _id: new ObjectId(userId),
+        });
+        if (!user) {
+          return res.status(404).send({ message: "User not found" });
+        }
+        const newRequest = {
+          userId,
+          userName: user.name,
+          userEmail: user.email,
+          requestType,
+          requestStatus: "pending",
+          requestTime: new Date().toISOString(),
+        };
+        await roleCollection.insertOne(newRequest);
+        res.send({ message: "Role request sent successfully" });
+      } catch (err) {
+        res.status(500).send({ message: "Server error" });
+      }
     });
     // get meals..........meals section
     app.get("/meals", async (req, res) => {
