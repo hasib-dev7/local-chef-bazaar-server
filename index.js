@@ -57,6 +57,17 @@ async function run() {
     const favoritesCollection = db.collection("favorite");
     const usersCollection = db.collection("user");
     const roleCollection = db.collection("role");
+    // role middlewares
+    const verifyADMIN = async (req, res, next) => {
+      const email = req.tokenEmail;
+      const user = await usersCollection.findOne({ email });
+      if (user?.role !== "admin")
+        return res
+          .status(403)
+          .send({ message: "Admin only Actions!", role: user?.role });
+
+      next();
+    };
     // post user data .......user role section
     app.post("/users", async (req, res) => {
       const userData = req.body;
@@ -78,7 +89,7 @@ async function run() {
       res.send(result);
     });
     // GET /users
-    app.get("/users", async (req, res) => {
+    app.get("/users", verifyJWT, verifyADMIN, async (req, res) => {
       try {
         const users = await usersCollection.find().toArray();
         res.send(users);
@@ -94,47 +105,50 @@ async function run() {
       res.send(result);
     });
     // PATCH /users/fraud/:userId
-    app.patch("/users/fraud/:userId", async (req, res) => {
-      try {
-        const { userId } = req.params;
-        // Validate userId
-        if (!userId) {
-          return res.status(400).send({ message: "User ID is required" });
-        }
-        // Find user
-        const user = await usersCollection.findOne({
-          _id: new ObjectId(userId),
-        });
-        if (!user) {
-          return res.status(404).send({ message: "User not found" });
-        }
-        // Admins cannot be fraud
-        if (user.role === "admin") {
-          return res
-            .status(400)
-            .send({ message: "Admin cannot be marked as fraud" });
-        }
-        // Already fraud?
-        if (user.status === "fraud") {
-          return res.status(400).send({ message: "User is already fraud" });
-        }
-        // Update user status to fraud
-        await usersCollection.updateOne(
-          { _id: new ObjectId(userId) },
-          { $set: { status: "fraud" } }
-        );
+    app.patch(
+      "/users/fraud/:userId",
+      verifyJWT,
+      verifyADMIN,
+      async (req, res) => {
+        try {
+          const { userId } = req.params;
+          // Validate userId
+          if (!userId) {
+            return res.status(400).send({ message: "User ID is required" });
+          }
+          // Find user
+          const user = await usersCollection.findOne({
+            _id: new ObjectId(userId),
+          });
+          if (!user) {
+            return res.status(404).send({ message: "User not found" });
+          }
+          // Admins cannot be fraud
+          if (user.role === "admin") {
+            return res
+              .status(400)
+              .send({ message: "Admin cannot be marked as fraud" });
+          }
+          // Already fraud?
+          if (user.status === "fraud") {
+            return res.status(400).send({ message: "User is already fraud" });
+          }
+          // Update user status to fraud
+          await usersCollection.updateOne(
+            { _id: new ObjectId(userId) },
+            { $set: { status: "fraud" } }
+          );
 
-        res.send({ message: `${user.name} has been marked as fraud ` });
-      } catch (error) {
-        console.error(error);
-        res.status(500).send({ message: "Server error" });
+          res.send({ message: `${user.name} has been marked as fraud ` });
+        } catch (error) {
+          console.error(error);
+          res.status(500).send({ message: "Server error" });
+        }
       }
-    });
-
+    );
     // get user's role ....role section
     app.get("/user/role", verifyJWT, async (req, res) => {
       // console.log("veriy email",req.tokenEmail);
-
       const result = await usersCollection.findOne({ email: req.tokenEmail });
       res.send({ role: result?.role });
     });
@@ -144,65 +158,122 @@ async function run() {
       const result = await usersCollection.find({ email }).toArray();
       res.send(result);
     });
-    // manage request section
+    // admin section..........
     // get all role requests
-    app.get("/role-requests", verifyJWT, async (req, res) => {
+    app.get("/role-requests", verifyJWT, verifyADMIN, async (req, res) => {
       const result = await roleCollection.find().toArray();
       res.send(result);
     });
     // approve request
-    app.patch("/role-requests/approve/:id", verifyJWT, async (req, res) => {
-      const requestId = req.params.id;
-      const request = await roleCollection.findOne({
-        _id: new ObjectId(requestId),
-      });
-      if (!request) {
-        return res.status(404).send({ message: "Request not found" });
-      }
-      //  Chef request
-      if (request.requestType === "chef") {
-        const chefId = `chef-${Math.floor(1000 + Math.random() * 9000)}`;
-        await usersCollection.updateOne(
-          { _id: new ObjectId(request.userId) },
-          {
-            $set: {
-              role: "chef",
-              chefId: chefId,
-            },
-          }
+    app.patch(
+      "/role-requests/approve/:id",
+      verifyJWT,
+      verifyADMIN,
+      async (req, res) => {
+        const requestId = req.params.id;
+        const request = await roleCollection.findOne({
+          _id: new ObjectId(requestId),
+        });
+        if (!request) {
+          return res.status(404).send({ message: "Request not found" });
+        }
+        //  Chef request
+        if (request.requestType === "chef") {
+          const chefId = `chef-${Math.floor(1000 + Math.random() * 9000)}`;
+          await usersCollection.updateOne(
+            { _id: new ObjectId(request.userId) },
+            {
+              $set: {
+                role: "chef",
+                chefId: chefId,
+              },
+            }
+          );
+        }
+        //  Admin request
+        if (request.requestType === "admin") {
+          await usersCollection.updateOne(
+            { _id: new ObjectId(request.userId) },
+            {
+              $set: { role: "admin" },
+            }
+          );
+        }
+        //  Update request status
+        await roleCollection.updateOne(
+          { _id: new ObjectId(requestId) },
+          { $set: { requestStatus: "approved" } }
         );
+        res.send({ message: "Request approved successfully" });
       }
-      //  Admin request
-      if (request.requestType === "admin") {
-        await usersCollection.updateOne(
-          { _id: new ObjectId(request.userId) },
-          {
-            $set: { role: "admin" },
-          }
-        );
-      }
-      //  Update request status
-      await roleCollection.updateOne(
-        { _id: new ObjectId(requestId) },
-        { $set: { requestStatus: "approved" } }
-      );
-      res.send({ message: "Request approved successfully" });
-    });
+    );
     // reject request
-    app.patch("/role-requests/reject/:id", verifyJWT, async (req, res) => {
-      const requestId = req.params.id;
-      const request = await roleCollection.findOne({
-        _id: new ObjectId(requestId),
-      });
-      if (!request)
-        return res.status(404).send({ message: "Request not found" });
-      await roleCollection.updateOne(
-        { _id: new ObjectId(requestId) },
-        { $set: { requestStatus: "rejected" } }
-      );
-      res.send({ message: "Request rejected successfully" });
-    });
-
+    app.patch(
+      "/role-requests/reject/:id",
+      verifyJWT,
+      verifyADMIN,
+      async (req, res) => {
+        const requestId = req.params.id;
+        const request = await roleCollection.findOne({
+          _id: new ObjectId(requestId),
+        });
+        if (!request)
+          return res.status(404).send({ message: "Request not found" });
+        await roleCollection.updateOne(
+          { _id: new ObjectId(requestId) },
+          { $set: { requestStatus: "rejected" } }
+        );
+        res.send({ message: "Request rejected successfully" });
+      }
+    );
+    // Platform Statistics
+    app.get(
+      "/platform-statistics",
+      verifyJWT,
+      verifyADMIN,
+      async (req, res) => {
+        // Total Payment
+        const payments = await paymentCollection
+          .aggregate([{ $group: { _id: null, total: { $sum: "$amount" } } }])
+          .toArray();
+        // Total Users
+        const totalUsers = await usersCollection.countDocuments();
+        // Orders
+        const pendingOrders = await orderCollection.countDocuments({
+          orderStatus: "pending",
+        });
+        const deliveredOrders = await orderCollection.countDocuments({
+          orderStatus: "delivered",
+        });
+        // Active Chefs
+        const activeChefs = await usersCollection.countDocuments({
+          role: "chef",
+        });
+        // Meals
+        const totalMeals = await mealsCollection.countDocuments();
+        // Avg Rating - convert rating to number to handle string type
+        const ratings = await reviesCollection
+          .aggregate([
+            {
+              $group: {
+                _id: null,
+                avgRating: { $avg: { $toDouble: "$rating" } }, // convert string to number
+              },
+            },
+          ])
+          .toArray();
+        res.send({
+          totalPayment: payments[0]?.total || 0,
+          totalUsers,
+          pendingOrders,
+          deliveredOrders,
+          activeChefs,
+          totalMeals,
+          avgRating: ratings[0]?.avgRating?.toFixed(1) || 0,
+        });
+      }
+    );
+    //..................
     // role request API
     // get role request request type
     app.get("/role/requestType/:userId", async (req, res) => {
@@ -210,6 +281,15 @@ async function run() {
       const result = await roleCollection.findOne({
         userId,
         requestStatus: "pending",
+      });
+      res.send(result);
+    });
+    // get user chef role
+    app.get("/user/chef/:email", async (req, res) => {
+      const email = req.params.email;
+      const result = await usersCollection.findOne({
+        email: email,
+        role: "chef",
       });
       res.send(result);
     });
