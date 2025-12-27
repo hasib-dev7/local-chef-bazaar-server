@@ -338,6 +338,15 @@ async function run() {
       const result = await mealsCollection.find().toArray();
       res.send(result);
     });
+    // get meals laset 6 data home pages
+    app.get("/latest", async (req, res) => {
+      const latestMeals = await mealsCollection
+        .find({})
+        .sort({ createdAt: -1 })
+        .limit(6)
+        .toArray();
+      res.send(latestMeals);
+    });
     // get meals single data
     app.get("/meals/:id", async (req, res) => {
       const id = req.params.id;
@@ -348,26 +357,21 @@ async function run() {
     // post meals
     app.post("/meals", async (req, res) => {
       try {
-        const { chefID } = req.body;
-        // check if chef exists
-        const chef = await usersCollection.findOne({
-          _id: new ObjectId(chefID),
+        await mealsCollection.insertOne({
+          ...req.body,
+          createdAt: new Date(),
         });
-        if (!chef) return res.status(404).send({ message: "Chef not found" });
-        // block fraud chefs
-        if (chef.status === "fraud") {
-          return res
-            .status(403)
-            .send({ message: "You are blocked and cannot create meals 🚫" });
-        }
-        const mealData = { ...req.body, createdAt: new Date() };
-        const result = await mealsCollection.insertOne(mealData);
-        res.send({ message: "Meal created successfully ✅", result });
+        res.send({ message: "Meal created successfully ✅" });
       } catch (err) {
-        console.error(err);
+        if (err.code === 11000) {
+          return res
+            .status(409)
+            .send({ message: "You already have a meal with this name" });
+        }
         res.status(500).send({ message: "Server error" });
       }
     });
+
     // get my meals
     app.get("/my-meals/:email", async (req, res) => {
       const email = req.params.email;
@@ -449,6 +453,15 @@ async function run() {
       };
       const result = await reviesCollection.insertOne(body);
       res.send(result);
+    });
+    // get latest reviews home page
+    app.get("/latest/reviews", async (req, res) => {
+      const latestReviews = await reviesCollection
+        .find({})
+        .sort({ createdAt: -1 })
+        .limit(3)
+        .toArray();
+      res.send(latestReviews);
     });
     // reviews data food name id
     app.get("/reviews", async (req, res) => {
